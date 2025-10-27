@@ -1,0 +1,346 @@
+#!/usr/bin/env node
+
+import express from "express";
+import cors from "cors";
+import net from "net";
+import { createMCPServer, getServerStats } from "./src/mcpServer.js";
+import {
+  SERVER_CONFIG,
+  CORS_CONFIG
+} from "./src/config/config.js";
+
+/**
+ * Check if a port is available
+ * @param {number} port - Port number to check
+ * @param {string} host - Host to check (default: '0.0.0.0')
+ * @returns {Promise<boolean>} - True if port is available
+ */
+function isPortAvailable(port, host = '0.0.0.0') {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        resolve(false);
+      }
+    });
+
+    server.once('listening', () => {
+      server.close(() => {
+        resolve(true);
+      });
+    });
+
+    server.listen(port, host);
+  });
+}
+
+/**
+ * Find an available port starting from the preferred port
+ * @param {number} preferredPort - Preferred port number
+ * @param {string} host - Host to bind to
+ * @param {number} maxAttempts - Maximum number of ports to try (default: 100)
+ * @returns {Promise<number>} - Available port number
+ */
+async function findAvailablePort(preferredPort, host = '0.0.0.0', maxAttempts = 100) {
+  console.log(`🔍 Checking port availability starting from ${preferredPort}...`);
+
+  for (let i = 0; i < maxAttempts; i++) {
+    const port = preferredPort + i;
+    console.log(`   Checking port ${port}...`);
+
+    const available = await isPortAvailable(port, host);
+    if (available) {
+      console.log(`✅ Port ${port} is available`);
+      return port;
+    } else {
+      console.log(`❌ Port ${port} is in use`);
+    }
+  }
+  throw new Error(`Could not find an available port after trying ${maxAttempts} ports starting from ${preferredPort}`);
+}const app = express();
+const HOST = SERVER_CONFIG.host;
+const PREFERRED_PORT = SERVER_CONFIG.port;
+
+app.use(cors(CORS_CONFIG));
+app.use(express.json());
+
+// Request timeout middleware
+app.use((req, res, next) => {
+  // Set a timeout for all requests
+  req.setTimeout(30000, () => {
+    console.error(`⏱️ Request timeout: ${req.method} ${req.path}`);
+    if (!res.headersSent) {
+      res.status(408).json({
+        error: "Request timeout",
+        code: -32001
+      });
+    }
+  });
+  next();
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error("❌ Unhandled error:", err);
+  console.error("   Stack:", err.stack);
+
+  if (!res.headersSent) {
+    res.status(500).json({
+      error: err.message || "Internal server error",
+      code: -32603
+    });
+  }
+});
+
+const server = createMCPServer();
+
+// Find available port and start server
+async function startServer() {
+  try {
+    const PORT = await findAvailablePort(PREFERRED_PORT, HOST);
+
+    if (PORT !== PREFERRED_PORT) {
+      console.log(`⚠️  Port ${PREFERRED_PORT} is not available, using port ${PORT} instead`);
+    }
+
+    const serverInstance = app.listen(PORT, HOST, () => {
+      console.log("=".repeat(60));
+      console.log(`🚀 MCP Trading Indicators Server started successfully!`);
+      console.log("=".repeat(60));
+      console.log(`📦 Name: ${SERVER_CONFIG.name}`);
+      console.log(`📋 Version: ${SERVER_CONFIG.version}`);
+      console.log(`🌐 Host: ${HOST}`);
+      console.log(`🔌 Port: ${PORT}`);
+      if (PORT !== PREFERRED_PORT) {
+        console.log(`🔄 Original port ${PREFERRED_PORT} was not available`);
+      }
+      console.log(`📝 Log Level: ${SERVER_CONFIG.logLevel}`);
+      console.log("");
+      console.log("📡 Endpoint:");
+      console.log(`   - MCP:     http://${HOST}:${PORT}/mcp`);
+      console.log("");
+      console.log("📊 Trading Indicators: RSI, EMA, SMA, MACD, Bollinger Bands, Stochastic, ATR");
+      console.log("=".repeat(60));
+    });
+
+    // Handle server errors
+    serverInstance.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is still in use. This shouldn't happen!`);
+        console.error("   Trying to find another port...");
+        startServer(); // Retry with a different port
+      } else {
+        console.error("❌ Server error:", err);
+        process.exit(1);
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Failed to start server:", error.message);
+    process.exit(1);
+  }
+}
+
+// HTTP Streamable endpoint - handles JSON-RPC requests directly
+app.post('/mcp', async (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get('User-Agent') || 'unknown';
+
+  console.log("📡 New MCP request");
+  console.log(`   Client IP: ${clientIP}`);
+  console.log(`   User-Agent: ${userAgent.substring(0, 100)}`);
+  console.log(`   Method: ${req.body.method || 'unknown'}`);
+
+  try {
+    // Set headers for JSON response
+    res.setHeader('Content-Type', 'application/json');
+
+    const request = req.body;
+    
+    // Validate JSON-RPC request
+    if (!request || !request.jsonrpc || request.jsonrpc !== '2.0') {
+      return res.status(400).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32600,
+          message: 'Invalid Request'
+        },
+        id: request?.id || null
+      });
+    }
+
+    // Handle different MCP methods
+    let result;
+    
+    switch (request.method) {
+      case 'initialize':
+        result = {
+          protocolVersion: '2024-11-05',
+          capabilities: {
+            tools: {}
+          },
+          serverInfo: {
+            name: SERVER_CONFIG.name,
+            version: SERVER_CONFIG.version
+          }
+        };
+        break;
+
+      case 'tools/list':
+        const toolsResponse = await server.request({
+          method: 'tools/list'
+        }, { method: 'tools/list' });
+        result = toolsResponse;
+        break;
+
+      case 'tools/call':
+        if (!request.params?.name) {
+          return res.status(400).json({
+            jsonrpc: '2.0',
+            error: {
+              code: -32602,
+              message: 'Invalid params: missing tool name'
+            },
+            id: request.id
+          });
+        }
+
+        const toolResult = await server.request({
+          method: 'tools/call',
+          params: request.params
+        }, { method: 'tools/call', params: request.params });
+        
+        result = toolResult;
+        break;
+
+      default:
+        return res.status(400).json({
+          jsonrpc: '2.0',
+          error: {
+            code: -32601,
+            message: `Method not found: ${request.method}`
+          },
+          id: request.id
+        });
+    }
+
+    // Send successful response
+    res.json({
+      jsonrpc: '2.0',
+      result: result,
+      id: request.id
+    });
+
+    console.log(`✅ MCP request handled: ${request.method}`);
+
+  } catch (error) {
+    console.error("❌ Error handling MCP request:", error);
+    console.error("   Stack:", error.stack);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: error.message || "Internal error"
+        },
+        id: req.body?.id || null
+      });
+    }
+  }
+});
+}
+
+// HTTP Streamable endpoint
+app.post('/mcp', async (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+  const userAgent = req.get('User-Agent') || 'unknown';
+
+  console.log("📡 New MCP HTTP stream connection");
+  console.log(`   Client IP: ${clientIP}`);
+  console.log(`   User-Agent: ${userAgent.substring(0, 100)}`);
+
+  try {
+    // Set headers for streaming
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Transfer-Encoding', 'chunked');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Create a custom transport that uses req/res streams
+    const transport = new StdioServerTransport();
+    
+    // Pipe request to transport input
+    req.pipe(transport.stdin);
+    
+    // Pipe transport output to response
+    transport.stdout.pipe(res);
+
+    // Handle connection close
+    req.on('close', () => {
+      console.log('� MCP connection closed');
+      transport.close();
+    });
+
+    req.on('error', (error) => {
+      console.error('❌ Request error:', error);
+      transport.close();
+    });
+
+    res.on('error', (error) => {
+      console.error('❌ Response error:', error);
+      transport.close();
+    });
+
+    // Connect server to transport
+    await server.connect(transport);
+    console.log(`✅ MCP server connected via HTTP stream`);
+
+  } catch (error) {
+    console.error("❌ Error establishing MCP stream:", error);
+    console.error("   Stack:", error.stack);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: error.message || "Error establishing MCP stream",
+        code: -32603
+      });
+    }
+  }
+});
+
+// Start the server with automatic port selection
+startServer();
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Promise Rejection:', reason);
+  console.error('   Promise:', promise);
+  // Don't exit the process, just log the error
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  console.error('   Stack:', error.stack);
+  // Don't exit the process for non-critical errors
+  if (error.code === 'EADDRINUSE' || error.code === 'ECONNRESET') {
+    console.log('   Non-critical error, continuing...');
+  }
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+  console.log('✅ Shutdown complete');
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
+  console.log('✅ Shutdown complete');
+  process.exit(0);
+});

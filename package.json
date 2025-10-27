@@ -1,0 +1,33 @@
+{
+  "name": "mcp-server-trading-indicators",
+  "version": "1.0.0",
+  "description": "MCP Server for Trading Indicators - Technical Analysis Tools via SSE Transport",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node test-mcp-client.js"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "trading",
+    "indicators",
+    "technical-analysis",
+    "rsi",
+    "ema",
+    "macd",
+    "bollinger-bands",
+    "tulind",
+    "sse"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "tulind": "^0.8.20"
+  }
+}
