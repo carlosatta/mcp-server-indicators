@@ -197,7 +197,7 @@ export const calculateAllHandler = async (args) => {
       const fastPeriod = indicators.macd.fastPeriod || 12;
       const slowPeriod = indicators.macd.slowPeriod || 26;
       const signalPeriod = indicators.macd.signalPeriod || 9;
-      
+
       if (close.length >= slowPeriod + signalPeriod) {
         const macdResult = await new Promise((resolve, reject) => {
           tulind.indicators.macd.indicator(
@@ -209,7 +209,7 @@ export const calculateAllHandler = async (args) => {
             }
           );
         });
-        
+
         results.indicators.macd = {
           fastPeriod,
           slowPeriod,
@@ -230,7 +230,7 @@ export const calculateAllHandler = async (args) => {
     if (indicators.bollingerBands?.enabled) {
       const period = indicators.bollingerBands.period || 20;
       const stddev = indicators.bollingerBands.stddev || 2;
-      
+
       if (close.length >= period) {
         const bbResult = await new Promise((resolve, reject) => {
           tulind.indicators.bbands.indicator(
@@ -242,7 +242,7 @@ export const calculateAllHandler = async (args) => {
             }
           );
         });
-        
+
         results.indicators.bollingerBands = {
           period,
           stddev,
@@ -263,7 +263,7 @@ export const calculateAllHandler = async (args) => {
       const kPeriod = indicators.stochastic.kPeriod || 14;
       const kSlowPeriod = indicators.stochastic.kSlowPeriod || 3;
       const dPeriod = indicators.stochastic.dPeriod || 3;
-      
+
       if (high.length >= kPeriod + kSlowPeriod) {
         const stochResult = await new Promise((resolve, reject) => {
           tulind.indicators.stoch.indicator(
@@ -275,7 +275,7 @@ export const calculateAllHandler = async (args) => {
             }
           );
         });
-        
+
         results.indicators.stochastic = {
           kPeriod,
           kSlowPeriod,
@@ -293,7 +293,7 @@ export const calculateAllHandler = async (args) => {
     // Calculate ATR
     if (indicators.atr?.enabled) {
       const period = indicators.atr.period || 14;
-      
+
       if (high.length >= period) {
         const atrResult = await new Promise((resolve, reject) => {
           tulind.indicators.atr.indicator(
@@ -305,7 +305,7 @@ export const calculateAllHandler = async (args) => {
             }
           );
         });
-        
+
         results.indicators.atr = {
           period,
           values: Array.from(atrResult),

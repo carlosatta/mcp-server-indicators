@@ -6,6 +6,7 @@ import express from "express";
 import cors from "cors";
 import net from "net";
 import { createMCPServer, getServerStats } from "./src/mcpServer.js";
+import { publicToolsHandlers } from "./src/tools/publicTools.js";
 import {
   SERVER_CONFIG,
   CORS_CONFIG
@@ -81,6 +82,111 @@ const server = createMCPServer();
 const transports = new Map();
 const sessionMetadata = new Map();
 
+//=============================================================================
+// REST API ENDPOINTS - Direct HTTP API access (non-MCP)
+//=============================================================================
+
+/**
+ * Helper function to extract result from MCP tool handler response
+ */
+function extractResult(mcpResponse) {
+  if (mcpResponse.isError) {
+    const errorData = JSON.parse(mcpResponse.content[0].text);
+    throw new Error(errorData.error);
+  }
+  return JSON.parse(mcpResponse.content[0].text);
+}
+
+// API: Get server info
+app.get('/api/info', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.get_server_info({});
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// API: Calculate all indicators
+app.post('/api/indicators/all', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_all_indicators(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate RSI
+app.post('/api/indicators/rsi', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_rsi(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate EMA
+app.post('/api/indicators/ema', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_ema(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate SMA
+app.post('/api/indicators/sma', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_sma(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate MACD
+app.post('/api/indicators/macd', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_macd(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate Bollinger Bands
+app.post('/api/indicators/bollinger', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_bollinger_bands(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate Stochastic
+app.post('/api/indicators/stochastic', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_stochastic(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// API: Calculate ATR
+app.post('/api/indicators/atr', async (req, res) => {
+  try {
+    const result = await publicToolsHandlers.calculate_atr(req.body);
+    res.json(extractResult(result));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Find available port and start server
 async function startServer() {
   try {
@@ -94,8 +200,20 @@ async function startServer() {
       console.log("=".repeat(60));
       console.log(`🚀 MCP Trading Indicators Server`);
       console.log("=".repeat(60));
-      console.log(`🌐 ${HOST}:${PORT}/mcp`);
-      console.log(`� Protocol: Streamable HTTP (2025-03-26)`);
+      console.log(`🌐 MCP Endpoint:  http://${HOST}:${PORT}/mcp`);
+      console.log(`📡 Protocol: Streamable HTTP (2025-03-26)`);
+      console.log("");
+      console.log(`🔌 REST API Endpoints:`);
+      console.log(`   GET  /api/info                    - Server info`);
+      console.log(`   POST /api/indicators/all          - All indicators`);
+      console.log(`   POST /api/indicators/rsi          - RSI`);
+      console.log(`   POST /api/indicators/ema          - EMA`);
+      console.log(`   POST /api/indicators/sma          - SMA`);
+      console.log(`   POST /api/indicators/macd         - MACD`);
+      console.log(`   POST /api/indicators/bollinger    - Bollinger Bands`);
+      console.log(`   POST /api/indicators/stochastic   - Stochastic`);
+      console.log(`   POST /api/indicators/atr          - ATR`);
+      console.log("");
       console.log(`📊 Trading Indicators: RSI, EMA, SMA, MACD, Bollinger Bands, Stochastic, ATR`);
       console.log("=".repeat(60));
     });
