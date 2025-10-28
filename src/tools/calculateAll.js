@@ -47,61 +47,185 @@ export const calculateAllDefinition = {
       },
       indicators: {
         type: "object",
-        description: "Configuration for each indicator to calculate",
+        description: "Configuration for each indicator to calculate. Each indicator can be an object (single) or array of objects (multiple with different params)",
         properties: {
           rsi: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate RSI" },
-              period: { type: "number", description: "RSI period (default: 14)" }
-            }
+            description: "RSI configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate RSI" },
+                  period: { type: "number", description: "RSI period (default: 14)" },
+                  name: { type: "string", description: "Custom name for this indicator (e.g., 'RSI14')" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate RSI" },
+                    period: { type: "number", description: "RSI period" },
+                    name: { type: "string", description: "Custom name for this indicator (e.g., 'RSI7', 'RSI14')" }
+                  }
+                }
+              }
+            ]
           },
           ema: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate EMA" },
-              period: { type: "number", description: "EMA period (default: 20)" }
-            }
+            description: "EMA configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate EMA" },
+                  period: { type: "number", description: "EMA period (default: 20)" },
+                  name: { type: "string", description: "Custom name (e.g., 'EMA20')" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate EMA" },
+                    period: { type: "number", description: "EMA period" },
+                    name: { type: "string", description: "Custom name (e.g., 'EMA9', 'EMA20', 'EMA50')" }
+                  }
+                }
+              }
+            ]
           },
           sma: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate SMA" },
-              period: { type: "number", description: "SMA period (default: 20)" }
-            }
+            description: "SMA configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate SMA" },
+                  period: { type: "number", description: "SMA period (default: 20)" },
+                  name: { type: "string", description: "Custom name (e.g., 'SMA20')" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate SMA" },
+                    period: { type: "number", description: "SMA period" },
+                    name: { type: "string", description: "Custom name (e.g., 'SMA50', 'SMA200')" }
+                  }
+                }
+              }
+            ]
           },
           macd: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate MACD" },
-              fastPeriod: { type: "number", description: "Fast period (default: 12)" },
-              slowPeriod: { type: "number", description: "Slow period (default: 26)" },
-              signalPeriod: { type: "number", description: "Signal period (default: 9)" }
-            }
+            description: "MACD configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate MACD" },
+                  fastPeriod: { type: "number", description: "Fast period (default: 12)" },
+                  slowPeriod: { type: "number", description: "Slow period (default: 26)" },
+                  signalPeriod: { type: "number", description: "Signal period (default: 9)" },
+                  name: { type: "string", description: "Custom name" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate MACD" },
+                    fastPeriod: { type: "number", description: "Fast period" },
+                    slowPeriod: { type: "number", description: "Slow period" },
+                    signalPeriod: { type: "number", description: "Signal period" },
+                    name: { type: "string", description: "Custom name" }
+                  }
+                }
+              }
+            ]
           },
           bollingerBands: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate Bollinger Bands" },
-              period: { type: "number", description: "Period (default: 20)" },
-              stddev: { type: "number", description: "Standard deviation (default: 2)" }
-            }
+            description: "Bollinger Bands configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate Bollinger Bands" },
+                  period: { type: "number", description: "Period (default: 20)" },
+                  stddev: { type: "number", description: "Standard deviation (default: 2)" },
+                  name: { type: "string", description: "Custom name" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate Bollinger Bands" },
+                    period: { type: "number", description: "Period" },
+                    stddev: { type: "number", description: "Standard deviation" },
+                    name: { type: "string", description: "Custom name" }
+                  }
+                }
+              }
+            ]
           },
           stochastic: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate Stochastic" },
-              kPeriod: { type: "number", description: "%K period (default: 14)" },
-              kSlowPeriod: { type: "number", description: "%K slowing period (default: 3)" },
-              dPeriod: { type: "number", description: "%D period (default: 3)" }
-            }
+            description: "Stochastic configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate Stochastic" },
+                  kPeriod: { type: "number", description: "%K period (default: 14)" },
+                  kSlowPeriod: { type: "number", description: "%K slowing period (default: 3)" },
+                  dPeriod: { type: "number", description: "%D period (default: 3)" },
+                  name: { type: "string", description: "Custom name" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate Stochastic" },
+                    kPeriod: { type: "number", description: "%K period" },
+                    kSlowPeriod: { type: "number", description: "%K slowing period" },
+                    dPeriod: { type: "number", description: "%D period" },
+                    name: { type: "string", description: "Custom name" }
+                  }
+                }
+              }
+            ]
           },
           atr: {
-            type: "object",
-            properties: {
-              enabled: { type: "boolean", description: "Calculate ATR" },
-              period: { type: "number", description: "ATR period (default: 14)" }
-            }
+            description: "ATR configuration - can be object or array of objects",
+            oneOf: [
+              {
+                type: "object",
+                properties: {
+                  enabled: { type: "boolean", description: "Calculate ATR" },
+                  period: { type: "number", description: "ATR period (default: 14)" },
+                  name: { type: "string", description: "Custom name" }
+                }
+              },
+              {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    enabled: { type: "boolean", description: "Calculate ATR" },
+                    period: { type: "number", description: "ATR period" },
+                    name: { type: "string", description: "Custom name" }
+                  }
+                }
+              }
+            ]
           }
         }
       }
@@ -138,179 +262,223 @@ export const calculateAllHandler = async (args) => {
       indicators: {}
     };
 
-    // Calculate RSI
-    if (indicators.rsi?.enabled) {
-      const period = indicators.rsi.period || 14;
-      if (close.length >= period) {
-        const rsiResult = await new Promise((resolve, reject) => {
-          tulind.indicators.rsi.indicator([close], [period], (err, res) => {
-            if (err) reject(err);
-            else resolve(res[0]);
-          });
-        });
-        results.indicators.rsi = {
-          period,
-          values: Array.from(rsiResult),
-          latest: rsiResult[rsiResult.length - 1]
-        };
-      }
-    }
+    // Helper function to normalize indicator config (object or array)
+    const normalizeConfig = (config) => {
+      if (!config) return [];
+      return Array.isArray(config) ? config : [config];
+    };
 
-    // Calculate EMA
-    if (indicators.ema?.enabled) {
-      const period = indicators.ema.period || 20;
-      if (close.length >= period) {
-        const emaResult = await new Promise((resolve, reject) => {
-          tulind.indicators.ema.indicator([close], [period], (err, res) => {
-            if (err) reject(err);
-            else resolve(res[0]);
-          });
-        });
-        results.indicators.ema = {
-          period,
-          values: Array.from(emaResult),
-          latest: emaResult[emaResult.length - 1]
-        };
-      }
-    }
+    // Calculate RSI (support multiple periods)
+    const rsiConfigs = normalizeConfig(indicators.rsi);
+    for (const config of rsiConfigs) {
+      if (config.enabled) {
+        const period = config.period || 14;
+        const name = config.name || `rsi_${period}`;
 
-    // Calculate SMA
-    if (indicators.sma?.enabled) {
-      const period = indicators.sma.period || 20;
-      if (close.length >= period) {
-        const smaResult = await new Promise((resolve, reject) => {
-          tulind.indicators.sma.indicator([close], [period], (err, res) => {
-            if (err) reject(err);
-            else resolve(res[0]);
-          });
-        });
-        results.indicators.sma = {
-          period,
-          values: Array.from(smaResult),
-          latest: smaResult[smaResult.length - 1]
-        };
-      }
-    }
-
-    // Calculate MACD
-    if (indicators.macd?.enabled) {
-      const fastPeriod = indicators.macd.fastPeriod || 12;
-      const slowPeriod = indicators.macd.slowPeriod || 26;
-      const signalPeriod = indicators.macd.signalPeriod || 9;
-
-      if (close.length >= slowPeriod + signalPeriod) {
-        const macdResult = await new Promise((resolve, reject) => {
-          tulind.indicators.macd.indicator(
-            [close],
-            [fastPeriod, slowPeriod, signalPeriod],
-            (err, res) => {
-              if (err) reject(err);
-              else resolve(res);
-            }
-          );
-        });
-
-        results.indicators.macd = {
-          fastPeriod,
-          slowPeriod,
-          signalPeriod,
-          macd: Array.from(macdResult[0]),
-          signal: Array.from(macdResult[1]),
-          histogram: Array.from(macdResult[2]),
-          latest: {
-            macd: macdResult[0][macdResult[0].length - 1],
-            signal: macdResult[1][macdResult[1].length - 1],
-            histogram: macdResult[2][macdResult[2].length - 1]
-          }
-        };
-      }
-    }
-
-    // Calculate Bollinger Bands
-    if (indicators.bollingerBands?.enabled) {
-      const period = indicators.bollingerBands.period || 20;
-      const stddev = indicators.bollingerBands.stddev || 2;
-
-      if (close.length >= period) {
-        const bbResult = await new Promise((resolve, reject) => {
-          tulind.indicators.bbands.indicator(
-            [close],
-            [period, stddev],
-            (err, res) => {
-              if (err) reject(err);
-              else resolve(res);
-            }
-          );
-        });
-
-        results.indicators.bollingerBands = {
-          period,
-          stddev,
-          lower: Array.from(bbResult[0]),
-          middle: Array.from(bbResult[1]),
-          upper: Array.from(bbResult[2]),
-          latest: {
-            lower: bbResult[0][bbResult[0].length - 1],
-            middle: bbResult[1][bbResult[1].length - 1],
-            upper: bbResult[2][bbResult[2].length - 1]
-          }
-        };
-      }
-    }
-
-    // Calculate Stochastic
-    if (indicators.stochastic?.enabled) {
-      const kPeriod = indicators.stochastic.kPeriod || 14;
-      const kSlowPeriod = indicators.stochastic.kSlowPeriod || 3;
-      const dPeriod = indicators.stochastic.dPeriod || 3;
-
-      if (high.length >= kPeriod + kSlowPeriod) {
-        const stochResult = await new Promise((resolve, reject) => {
-          tulind.indicators.stoch.indicator(
-            [high, low, close],
-            [kPeriod, kSlowPeriod, dPeriod],
-            (err, res) => {
-              if (err) reject(err);
-              else resolve(res);
-            }
-          );
-        });
-
-        results.indicators.stochastic = {
-          kPeriod,
-          kSlowPeriod,
-          dPeriod,
-          k: Array.from(stochResult[0]),
-          d: Array.from(stochResult[1]),
-          latest: {
-            k: stochResult[0][stochResult[0].length - 1],
-            d: stochResult[1][stochResult[1].length - 1]
-          }
-        };
-      }
-    }
-
-    // Calculate ATR
-    if (indicators.atr?.enabled) {
-      const period = indicators.atr.period || 14;
-
-      if (high.length >= period) {
-        const atrResult = await new Promise((resolve, reject) => {
-          tulind.indicators.atr.indicator(
-            [high, low, close],
-            [period],
-            (err, res) => {
+        if (close.length >= period) {
+          const rsiResult = await new Promise((resolve, reject) => {
+            tulind.indicators.rsi.indicator([close], [period], (err, res) => {
               if (err) reject(err);
               else resolve(res[0]);
-            }
-          );
-        });
+            });
+          });
+          results.indicators[name] = {
+            type: 'RSI',
+            period,
+            values: Array.from(rsiResult),
+            latest: rsiResult[rsiResult.length - 1]
+          };
+        }
+      }
+    }
 
-        results.indicators.atr = {
-          period,
-          values: Array.from(atrResult),
-          latest: atrResult[atrResult.length - 1]
-        };
+    // Calculate EMA (support multiple periods)
+    const emaConfigs = normalizeConfig(indicators.ema);
+    for (const config of emaConfigs) {
+      if (config.enabled) {
+        const period = config.period || 20;
+        const name = config.name || `ema_${period}`;
+
+        if (close.length >= period) {
+          const emaResult = await new Promise((resolve, reject) => {
+            tulind.indicators.ema.indicator([close], [period], (err, res) => {
+              if (err) reject(err);
+              else resolve(res[0]);
+            });
+          });
+          results.indicators[name] = {
+            type: 'EMA',
+            period,
+            values: Array.from(emaResult),
+            latest: emaResult[emaResult.length - 1]
+          };
+        }
+      }
+    }
+
+    // Calculate SMA (support multiple periods)
+    const smaConfigs = normalizeConfig(indicators.sma);
+    for (const config of smaConfigs) {
+      if (config.enabled) {
+        const period = config.period || 20;
+        const name = config.name || `sma_${period}`;
+
+        if (close.length >= period) {
+          const smaResult = await new Promise((resolve, reject) => {
+            tulind.indicators.sma.indicator([close], [period], (err, res) => {
+              if (err) reject(err);
+              else resolve(res[0]);
+            });
+          });
+          results.indicators[name] = {
+            type: 'SMA',
+            period,
+            values: Array.from(smaResult),
+            latest: smaResult[smaResult.length - 1]
+          };
+        }
+      }
+    }
+
+    // Calculate MACD (support multiple configurations)
+    const macdConfigs = normalizeConfig(indicators.macd);
+    for (const config of macdConfigs) {
+      if (config.enabled) {
+        const fastPeriod = config.fastPeriod || 12;
+        const slowPeriod = config.slowPeriod || 26;
+        const signalPeriod = config.signalPeriod || 9;
+        const name = config.name || `macd_${fastPeriod}_${slowPeriod}_${signalPeriod}`;
+
+        if (close.length >= slowPeriod + signalPeriod) {
+          const macdResult = await new Promise((resolve, reject) => {
+            tulind.indicators.macd.indicator(
+              [close],
+              [fastPeriod, slowPeriod, signalPeriod],
+              (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+              }
+            );
+          });
+
+          results.indicators[name] = {
+            type: 'MACD',
+            fastPeriod,
+            slowPeriod,
+            signalPeriod,
+            macd: Array.from(macdResult[0]),
+            signal: Array.from(macdResult[1]),
+            histogram: Array.from(macdResult[2]),
+            latest: {
+              macd: macdResult[0][macdResult[0].length - 1],
+              signal: macdResult[1][macdResult[1].length - 1],
+              histogram: macdResult[2][macdResult[2].length - 1]
+            }
+          };
+        }
+      }
+    }
+
+    // Calculate Bollinger Bands (support multiple configurations)
+    const bbConfigs = normalizeConfig(indicators.bollingerBands);
+    for (const config of bbConfigs) {
+      if (config.enabled) {
+        const period = config.period || 20;
+        const stddev = config.stddev || 2;
+        const name = config.name || `bb_${period}_${stddev}`;
+
+        if (close.length >= period) {
+          const bbResult = await new Promise((resolve, reject) => {
+            tulind.indicators.bbands.indicator(
+              [close],
+              [period, stddev],
+              (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+              }
+            );
+          });
+
+          results.indicators[name] = {
+            type: 'BollingerBands',
+            period,
+            stddev,
+            lower: Array.from(bbResult[0]),
+            middle: Array.from(bbResult[1]),
+            upper: Array.from(bbResult[2]),
+            latest: {
+              lower: bbResult[0][bbResult[0].length - 1],
+              middle: bbResult[1][bbResult[1].length - 1],
+              upper: bbResult[2][bbResult[2].length - 1]
+            }
+          };
+        }
+      }
+    }
+
+    // Calculate Stochastic (support multiple configurations)
+    const stochConfigs = normalizeConfig(indicators.stochastic);
+    for (const config of stochConfigs) {
+      if (config.enabled) {
+        const kPeriod = config.kPeriod || 14;
+        const kSlowPeriod = config.kSlowPeriod || 3;
+        const dPeriod = config.dPeriod || 3;
+        const name = config.name || `stoch_${kPeriod}_${kSlowPeriod}_${dPeriod}`;
+
+        if (high.length >= kPeriod + kSlowPeriod) {
+          const stochResult = await new Promise((resolve, reject) => {
+            tulind.indicators.stoch.indicator(
+              [high, low, close],
+              [kPeriod, kSlowPeriod, dPeriod],
+              (err, res) => {
+                if (err) reject(err);
+                else resolve(res);
+              }
+            );
+          });
+
+          results.indicators[name] = {
+            type: 'Stochastic',
+            kPeriod,
+            kSlowPeriod,
+            dPeriod,
+            k: Array.from(stochResult[0]),
+            d: Array.from(stochResult[1]),
+            latest: {
+              k: stochResult[0][stochResult[0].length - 1],
+              d: stochResult[1][stochResult[1].length - 1]
+            }
+          };
+        }
+      }
+    }
+
+    // Calculate ATR (support multiple configurations)
+    const atrConfigs = normalizeConfig(indicators.atr);
+    for (const config of atrConfigs) {
+      if (config.enabled) {
+        const period = config.period || 14;
+        const name = config.name || `atr_${period}`;
+
+        if (high.length >= period) {
+          const atrResult = await new Promise((resolve, reject) => {
+            tulind.indicators.atr.indicator(
+              [high, low, close],
+              [period],
+              (err, res) => {
+                if (err) reject(err);
+                else resolve(res[0]);
+              }
+            );
+          });
+
+          results.indicators[name] = {
+            type: 'ATR',
+            period,
+            values: Array.from(atrResult),
+            latest: atrResult[atrResult.length - 1]
+          };
+        }
       }
     }
 
