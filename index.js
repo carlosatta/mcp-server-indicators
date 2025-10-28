@@ -136,8 +136,8 @@ app.all('/mcp', async (req, res) => {
       if (metadata) {
         metadata.lastActivity = new Date();
       }
-    } else if (!sessionId && req.method === 'POST' && req.body?.method === 'initialize') {
-      // Create new transport for initialization
+    } else if (!sessionId) {
+      // Create new transport for new session
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (newSessionId) => {
@@ -165,12 +165,12 @@ app.all('/mcp', async (req, res) => {
       // Connect server to transport
       await server.connect(transport);
     } else {
-      // Invalid request
+      // Session ID provided but not found
       res.status(400).json({
         jsonrpc: '2.0',
         error: {
           code: -32000,
-          message: 'Bad Request: No valid session ID provided'
+          message: 'Bad Request: Invalid session ID'
         },
         id: null
       });
