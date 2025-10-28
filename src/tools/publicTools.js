@@ -4,6 +4,7 @@
  */
 
 import { tradingIndicatorsDefinitions, tradingIndicatorsHandlers } from './tradingIndicators.js';
+import { calculateAllDefinition, calculateAllHandler } from './calculateAll.js';
 
 /**
  * Public tools definitions for MCP
@@ -18,6 +19,8 @@ export const publicToolsDefinitions = [
       required: [],
     },
   },
+  // Aggregated high-performance tool
+  calculateAllDefinition,
   // Include all trading indicators as public tools
   ...tradingIndicatorsDefinitions,
 ];
@@ -41,8 +44,8 @@ export const publicToolsHandlers = {
       architecture: process.arch,
       memory: process.memoryUsage(),
       tradingIndicators: {
-        total: tradingIndicatorsDefinitions.length,
-        available: tradingIndicatorsDefinitions.map(ind => ind.name)
+        total: tradingIndicatorsDefinitions.length + 1, // +1 for calculate_all_indicators
+        available: ['calculate_all_indicators', ...tradingIndicatorsDefinitions.map(ind => ind.name)]
       }
     };
 
@@ -55,6 +58,9 @@ export const publicToolsHandlers = {
       ],
     };
   },
+
+  // Aggregated high-performance tool
+  calculate_all_indicators: calculateAllHandler,
 
   // Include all trading indicators handlers
   ...tradingIndicatorsHandlers,
