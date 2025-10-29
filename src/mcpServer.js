@@ -68,7 +68,7 @@ export function createMCPServer() {
       // Execute the handler with timeout (configurable)
       const executionTimeout = MCP_CONFIG.toolExecutionTimeoutMs;
       const handlerPromise = allHandlers[name](args);
-      
+
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
           reject(new Error(`Tool execution timed out after ${executionTimeout}ms`));

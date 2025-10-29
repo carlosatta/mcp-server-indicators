@@ -14,30 +14,30 @@ console.log("=".repeat(50));
  */
 async function testConcurrentRequests() {
   console.log("1️⃣  Test: Concurrent requests (no transport blocking)");
-  
+
   const clients = [];
   const promises = [];
-  
+
   // Create multiple clients
   for (let i = 0; i < 5; i++) {
     const client = new Client(
       { name: `stress-client-${i}`, version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     clients.push({ client, transport });
   }
-  
+
   try {
     // Connect all clients
     for (const { client, transport } of clients) {
       await client.connect(transport);
     }
-    
+
     // Execute concurrent calculations
     const startTime = Date.now();
-    
+
     for (let i = 0; i < clients.length; i++) {
       const { client } = clients[i];
       promises.push(
@@ -61,23 +61,23 @@ async function testConcurrentRequests() {
         })
       );
     }
-    
+
     // Wait for all to complete
     const results = await Promise.allSettled(promises);
     const endTime = Date.now();
-    
+
     const successful = results.filter(r => r.status === 'fulfilled').length;
     const failed = results.filter(r => r.status === 'rejected').length;
-    
+
     console.log(`   ✅ Concurrent execution: ${successful}/${clients.length} successful`);
     console.log(`   ⏱️  Total time: ${endTime - startTime}ms`);
     console.log(`   ${failed > 0 ? '⚠️' : '✅'} Failed requests: ${failed}`);
-    
+
     // Close all clients
     for (const { client } of clients) {
       await client.close();
     }
-    
+
   } catch (error) {
     console.log("   ❌ Concurrent test failed:", error.message);
   }
@@ -88,19 +88,19 @@ async function testConcurrentRequests() {
  */
 async function testTimeoutScenarios() {
   console.log("2️⃣  Test: Timeout scenarios (transport cleanup)");
-  
+
   try {
     const client = new Client(
       { name: "timeout-test", version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
-    
+
     // Test with large dataset that might timeout
     const startTime = Date.now();
-    
+
     const result = await client.callTool({
       name: "calculate_all_indicators",
       arguments: {
@@ -134,14 +134,14 @@ async function testTimeoutScenarios() {
         }
       }
     });
-    
+
     const endTime = Date.now();
     const data = JSON.parse(result.content[0].text);
-    
+
     console.log(`   ✅ Large dataset processed in ${endTime - startTime}ms`);
     console.log(`   📊 Server execution time: ${data.executionTime}ms`);
     console.log(`   📈 Indicators calculated: ${Object.keys(data.indicators).length}`);
-    
+
     // Test that transport is still responsive
     const quickTest = await client.callTool({
       name: "calculate_rsi",
@@ -150,11 +150,11 @@ async function testTimeoutScenarios() {
         period: 14
       }
     });
-    
+
     console.log("   ✅ Transport remained responsive after stress test");
-    
+
     await client.close();
-    
+
   } catch (error) {
     if (error.message.includes('timeout')) {
       console.log("   ✅ Timeout handled correctly, no transport blocking");
@@ -169,16 +169,16 @@ async function testTimeoutScenarios() {
  */
 async function testErrorHandling() {
   console.log("3️⃣  Test: Error handling (no transport blocking)");
-  
+
   try {
     const client = new Client(
       { name: "error-test", version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
-    
+
     // Test with invalid data
     const result = await client.callTool({
       name: "calculate_rsi",
@@ -187,16 +187,16 @@ async function testErrorHandling() {
         period: 14
       }
     });
-    
+
     const data = JSON.parse(result.content[0].text);
-    
+
     if (data.error) {
       console.log("   ✅ Error handled with structured response");
       console.log(`   📝 Error message: ${data.error}`);
     } else {
       console.log("   ⚠️  Expected error but got success");
     }
-    
+
     // Test that transport is still responsive after error
     const validTest = await client.callTool({
       name: "calculate_rsi",
@@ -205,11 +205,11 @@ async function testErrorHandling() {
         period: 14
       }
     });
-    
+
     console.log("   ✅ Transport remained responsive after error");
-    
+
     await client.close();
-    
+
   } catch (error) {
     console.log("   ❌ Error handling test failed:", error.message);
   }
@@ -221,7 +221,7 @@ async function runStressTests() {
     await testConcurrentRequests();
     await testTimeoutScenarios();
     await testErrorHandling();
-    
+
     console.log("=".repeat(50));
     console.log("🎉 Transport Blocking Prevention Test Complete");
     console.log("📋 Summary:");
@@ -230,7 +230,7 @@ async function runStressTests() {
     console.log("   - Structured error responses prevent blocking");
     console.log("   - Session cleanup on timeout");
     console.log("   - Concurrent execution supported");
-    
+
   } catch (error) {
     console.error("❌ Stress test suite failed:", error.message);
   } finally {

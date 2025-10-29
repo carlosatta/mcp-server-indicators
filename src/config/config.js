@@ -29,13 +29,13 @@ export const ENDPOINTS = {
 export const MCP_CONFIG = {
   // Session timeout: 5 minutes (increased from 60s for trading workflows)
   sessionTimeoutMs: parseInt(process.env.MCP_SESSION_TIMEOUT_MS) || 5 * 60 * 1000,
-  
+
   // Cleanup interval: 30 seconds (reduced from 10s for better management)
   cleanupIntervalMs: parseInt(process.env.MCP_CLEANUP_INTERVAL_MS) || 30 * 1000,
-  
+
   // Auto session recreation for backward compatibility (default: false for standard compliance)
   allowAutoSessionRecreate: process.env.ALLOW_AUTO_SESSION_RECREATE === 'true',
-  
+
   // Tool execution timeout: 20 seconds
   toolExecutionTimeoutMs: parseInt(process.env.TOOL_EXECUTION_TIMEOUT_MS) || 20 * 1000,
 };

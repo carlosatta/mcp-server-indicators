@@ -242,7 +242,7 @@ export const calculateAllDefinition = {
  */
 const withTimeout = (promise, timeout = 3000) => {
   let timeoutId;
-  
+
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error(`Operation timed out after ${timeout}ms`));
@@ -283,7 +283,7 @@ const runIndicatorWithTimeout = (indicatorName, inputs, params, timeout = 1000) 
       }
     });
   });
-  
+
   return withTimeout(promise, timeout);
 };/**
  * Handler function for calculate_all_indicators
@@ -292,7 +292,7 @@ const runIndicatorWithTimeout = (indicatorName, inputs, params, timeout = 1000) 
  */
 export const calculateAllHandler = async (args) => {
   const startTime = Date.now();
-  
+
   try {
     const { symbol, ohlcv, indicators } = args;
     const { high, low, close, volume } = ohlcv;

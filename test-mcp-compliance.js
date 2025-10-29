@@ -14,19 +14,19 @@ console.log("=".repeat(50));
  */
 async function testInitialize() {
   console.log("1️⃣  Test: Initialize creates new session");
-  
+
   try {
     const client = new Client(
       { name: "test-compliance", version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
-    
+
     console.log("   ✅ Initialize successful - new session created");
     await client.close();
-    
+
   } catch (error) {
     console.log("   ❌ Initialize failed:", error.message);
   }
@@ -37,7 +37,7 @@ async function testInitialize() {
  */
 async function testNoSessionId() {
   console.log("2️⃣  Test: Request without session ID");
-  
+
   try {
     const response = await fetch(`${baseUrl}/mcp`, {
       method: 'POST',
@@ -48,7 +48,7 @@ async function testNoSessionId() {
         id: 1
       })
     });
-    
+
     if (response.status === 400) {
       const data = await response.json();
       if (data.error && data.error.message.includes('Session ID required')) {
@@ -59,7 +59,7 @@ async function testNoSessionId() {
     } else {
       console.log("   ❌ Expected 400, got:", response.status);
     }
-    
+
   } catch (error) {
     console.log("   ❌ Test failed:", error.message);
   }
@@ -70,11 +70,11 @@ async function testNoSessionId() {
  */
 async function testInvalidSessionId() {
   console.log("3️⃣  Test: Invalid session ID returns 404");
-  
+
   try {
     const response = await fetch(`${baseUrl}/mcp`, {
       method: 'POST',
-      headers: { 
+      headers: {
         'Content-Type': 'application/json',
         'Mcp-Session-Id': 'invalid-session-id-12345'
       },
@@ -84,7 +84,7 @@ async function testInvalidSessionId() {
         id: 1
       })
     });
-    
+
     if (response.status === 404) {
       const data = await response.json();
       if (data.error && data.error.code === -32004) {
@@ -97,7 +97,7 @@ async function testInvalidSessionId() {
       const text = await response.text();
       console.log("   Response:", text.substring(0, 200));
     }
-    
+
   } catch (error) {
     console.log("   ❌ Test failed:", error.message);
   }
@@ -108,11 +108,11 @@ async function testInvalidSessionId() {
  */
 async function testSessionTimeout() {
   console.log("4️⃣  Test: Session timeout (abbreviated test)");
-  
+
   try {
     // Check session stats if available
     const response = await fetch(`${baseUrl}/mcp/sessions`);
-    
+
     if (response.status === 200) {
       const stats = await response.json();
       console.log("   📊 Session stats:", {
@@ -124,7 +124,7 @@ async function testSessionTimeout() {
     } else {
       console.log("   ℹ️  Session stats not available (may be disabled in production)");
     }
-    
+
   } catch (error) {
     console.log("   ⚠️  Could not test session timeout:", error.message);
   }
@@ -135,18 +135,18 @@ async function testSessionTimeout() {
  */
 async function testPerformance() {
   console.log("5️⃣  Test: Performance with parallel indicators");
-  
+
   try {
     const client = new Client(
       { name: "test-performance", version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
-    
+
     const startTime = Date.now();
-    
+
     const result = await client.callTool({
       name: "calculate_all_indicators",
       arguments: {
@@ -174,24 +174,24 @@ async function testPerformance() {
         }
       }
     });
-    
+
     const endTime = Date.now();
     const duration = endTime - startTime;
-    
+
     const data = JSON.parse(result.content[0].text);
     const indicatorCount = Object.keys(data.indicators).length;
-    
+
     console.log(`   ✅ Calculated ${indicatorCount} indicators in ${duration}ms`);
     console.log(`   📊 Execution time: ${data.executionTime}ms (server-side)`);
-    
+
     if (duration < 5000) { // Less than 5 seconds is good
       console.log("   🚀 Performance: EXCELLENT");
     } else {
       console.log("   ⚠️  Performance: Could be improved");
     }
-    
+
     await client.close();
-    
+
   } catch (error) {
     console.log("   ❌ Performance test failed:", error.message);
   }
@@ -205,7 +205,7 @@ async function runTests() {
     await testInvalidSessionId();
     await testSessionTimeout();
     await testPerformance();
-    
+
     console.log("=".repeat(50));
     console.log("🎉 MCP Standard Compliance Test Complete");
     console.log("📋 Summary:");
@@ -214,7 +214,7 @@ async function runTests() {
     console.log("   - Missing sessions return HTTP 400");
     console.log("   - Parallel indicator processing implemented");
     console.log("   - 5-minute session timeout configured");
-    
+
   } catch (error) {
     console.error("❌ Test suite failed:", error.message);
   } finally {

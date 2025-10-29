@@ -12,20 +12,20 @@ export class MCPSessionManager {
   constructor(options = {}) {
     this.transports = new Map();
     this.sessionMetadata = new Map();
-    
+
     // Configuration with environment variables support
-    this.inactiveTimeoutMs = options.inactiveTimeoutMs || 
-      parseInt(process.env.MCP_SESSION_TIMEOUT_MS) || 
+    this.inactiveTimeoutMs = options.inactiveTimeoutMs ||
+      parseInt(process.env.MCP_SESSION_TIMEOUT_MS) ||
       5 * 60 * 1000; // 5 minutes default
-    
-    this.cleanupIntervalMs = options.cleanupIntervalMs || 
-      parseInt(process.env.MCP_CLEANUP_INTERVAL_MS) || 
+
+    this.cleanupIntervalMs = options.cleanupIntervalMs ||
+      parseInt(process.env.MCP_CLEANUP_INTERVAL_MS) ||
       30 * 1000; // 30 seconds default
-    
+
     this.allowAutoSessionRecreate = options.allowAutoSessionRecreate ||
       process.env.ALLOW_AUTO_SESSION_RECREATE === 'true' ||
       false; // Default: strict standard compliance
-    
+
     this.startCleanupTimer();
   }
 
@@ -55,7 +55,7 @@ export class MCPSessionManager {
    */
   createSession(transport, metadata = {}) {
     const sessionId = randomUUID();
-    
+
     this.transports.set(sessionId, transport);
     this.sessionMetadata.set(sessionId, {
       connectedAt: new Date(),
@@ -93,7 +93,7 @@ export class MCPSessionManager {
         console.error(`Error closing transport for session ${sessionId}:`, error.message);
       }
     }
-    
+
     this.transports.delete(sessionId);
     this.sessionMetadata.delete(sessionId);
     console.log(`🔌 Session removed: ${sessionId}`);
@@ -107,9 +107,9 @@ export class MCPSessionManager {
    * @returns {object} Validation result with status and message
    */
   validateSession(sessionId, method, body) {
-    const isInitialize = method === 'POST' && 
-      body && 
-      typeof body === 'object' && 
+    const isInitialize = method === 'POST' &&
+      body &&
+      typeof body === 'object' &&
       body.method === 'initialize';
 
     // Case 1: Initialize request - should not have existing session
@@ -219,14 +219,14 @@ export class MCPSessionManager {
    */
   shutdown() {
     console.log('🛑 Shutting down MCP Session Manager...');
-    
+
     this.stopCleanupTimer();
-    
+
     // Close all active sessions
     for (const sessionId of this.transports.keys()) {
       this.removeSession(sessionId);
     }
-    
+
     console.log('✅ MCP Session Manager shutdown complete');
   }
 }

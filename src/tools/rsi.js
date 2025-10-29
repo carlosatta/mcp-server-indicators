@@ -93,7 +93,7 @@ export const rsiHandler = async (args) => {
           });
         });
       }),
-      new Promise((_, reject) => 
+      new Promise((_, reject) =>
         setTimeout(() => reject(new Error('RSI calculation timeout')), 1000)
       )
     ]);

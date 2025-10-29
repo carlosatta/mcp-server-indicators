@@ -246,7 +246,7 @@ app.all('/mcp', async (req, res) => {
   try {
     // Validate session according to MCP standard
     const validation = sessionManager.validateSession(sessionId, req.method, req.body);
-    
+
     if (validation.status === 'error') {
       // Standard compliant error responses
       const response = {
@@ -257,7 +257,7 @@ app.all('/mcp', async (req, res) => {
         },
         id: null
       };
-      
+
       console.log(`❌ MCP Session Error: ${validation.message} (${validation.httpCode})`);
       res.status(validation.httpCode).json(response);
       return;
@@ -269,7 +269,7 @@ app.all('/mcp', async (req, res) => {
       // Use existing session
       transport = sessionManager.getTransport(sessionId);
       sessionManager.updateActivity(sessionId);
-      
+
     } else if (validation.status === 'create_new') {
       // Create new session (for initialize or auto-recreate)
       transport = new StreamableHTTPServerTransport({
@@ -280,12 +280,12 @@ app.all('/mcp', async (req, res) => {
             userAgent: req.get('user-agent'),
             createdBy: req.body?.method === 'initialize' ? 'initialize' : 'auto-recreate'
           });
-          
+
           // Set up session lifecycle handlers
           transport.onclose = () => {
             sessionManager.removeSession(newSessionId);
           };
-          
+
           return newSessionId;
         }
       });
@@ -310,7 +310,7 @@ app.all('/mcp', async (req, res) => {
       clearTimeout(timeoutId);
       throw error;
     }
-    
+
   } catch (error) {
     console.error('❌ MCP Error:', error);
     if (!res.headersSent) {
@@ -328,10 +328,10 @@ app.all('/mcp', async (req, res) => {
 
 // MCP Session Management Endpoint (for debugging/monitoring)
 app.get('/mcp/sessions', (req, res) => {
-  const isDev = process.env.NODE_ENV === 'development' || 
+  const isDev = process.env.NODE_ENV === 'development' ||
                 process.env.ENABLE_SESSION_DEBUG === 'true' ||
                 !process.env.NODE_ENV; // Default when NODE_ENV is not set
-  
+
   if (isDev) {
     res.json(sessionManager.getStats());
   } else {
