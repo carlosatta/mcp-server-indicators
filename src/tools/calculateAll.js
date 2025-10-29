@@ -235,64 +235,116 @@ export const calculateAllDefinition = {
 };
 
 /**
- * Helper function to create Promise with timeout
+ * Helper function to create Promise with timeout and circuit breaker
  * @param {Promise} promise - Promise to wrap
  * @param {number} timeout - Timeout in ms
  * @returns {Promise} Promise with timeout
  */
-const withTimeout = (promise, timeout = 5000) => {
+const withTimeout = (promise, timeout = 3000) => {
+  let timeoutId;
+  
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Operation timed out after ${timeout}ms`));
+    }, timeout);
+  });
+
   return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Operation timed out after ${timeout}ms`)), timeout)
-    )
+    promise.then(result => {
+      clearTimeout(timeoutId);
+      return result;
+    }).catch(error => {
+      clearTimeout(timeoutId);
+      throw error;
+    }),
+    timeoutPromise
   ]);
 };
 
 /**
- * Helper function to run tulind indicator with timeout
+ * Helper function to run tulind indicator with aggressive timeout and circuit breaker
  * @param {string} indicatorName - Tulind indicator name
  * @param {Array} inputs - Input arrays
  * @param {Array} params - Parameters
- * @param {number} timeout - Timeout in ms
+ * @param {number} timeout - Timeout in ms (reduced to 1s for trading speed)
  * @returns {Promise<Array>} Result array
  */
-const runIndicatorWithTimeout = (indicatorName, inputs, params, timeout = 3000) => {
+const runIndicatorWithTimeout = (indicatorName, inputs, params, timeout = 1000) => {
   const promise = new Promise((resolve, reject) => {
-    tulind.indicators[indicatorName].indicator(inputs, params, (err, res) => {
-      if (err) reject(err);
-      else resolve(res);
+    // Add process.nextTick to ensure tulind doesn't block event loop
+    process.nextTick(() => {
+      try {
+        tulind.indicators[indicatorName].indicator(inputs, params, (err, res) => {
+          if (err) reject(err);
+          else resolve(res);
+        });
+      } catch (syncError) {
+        reject(syncError);
+      }
     });
   });
+  
   return withTimeout(promise, timeout);
-};
-
-/**
+};/**
  * Handler function for calculate_all_indicators
  * @param {object} args - Tool arguments
  * @returns {object} Calculation results or error
  */
 export const calculateAllHandler = async (args) => {
   const startTime = Date.now();
-
+  
   try {
     const { symbol, ohlcv, indicators } = args;
     const { high, low, close, volume } = ohlcv;
 
-    // Validation
+    // Validation with immediate structured response
     if (!high || !low || !close) {
-      throw new Error("Missing required OHLCV data (high, low, close)");
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: "Missing required OHLCV data (high, low, close)",
+              timestamp: new Date().toISOString(),
+              executionTime: Date.now() - startTime
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
     }
 
     if (high.length !== low.length || high.length !== close.length) {
-      throw new Error("OHLCV arrays must have the same length");
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: "OHLCV arrays must have the same length",
+              timestamp: new Date().toISOString(),
+              executionTime: Date.now() - startTime
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
     }
 
     if (high.length < 2) {
-      throw new Error("Need at least 2 data points");
-    }
-
-    const results = {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: "Need at least 2 data points",
+              timestamp: new Date().toISOString(),
+              executionTime: Date.now() - startTime
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }    const results = {
       symbol,
       timestamp: new Date().toISOString(),
       dataPoints: close.length,
@@ -496,13 +548,32 @@ export const calculateAllHandler = async (args) => {
       }
     }
 
-    // Execute all calculations in parallel with overall timeout
-    const allCalculations = await withTimeout(
-      Promise.allSettled(calculations),
-      15000 // 15 second max for all calculations
-    );
+    // Execute all calculations in parallel with aggressive timeout for trading
+    let allCalculations;
+    try {
+      allCalculations = await withTimeout(
+        Promise.allSettled(calculations),
+        5000 // 5 second max for all calculations (reduced for trading speed)
+      );
+    } catch (timeoutError) {
+      // Return partial results immediately on timeout to prevent transport blocking
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              error: "Calculation timeout - trading system protection activated",
+              partialResults: results.indicators,
+              timestamp: new Date().toISOString(),
+              executionTime: Date.now() - startTime
+            }, null, 2)
+          }
+        ],
+        isError: true
+      };
+    }
 
-    // Process results
+    // Process results with error isolation
     for (const result of allCalculations) {
       if (result.status === 'fulfilled' && result.value) {
         const { name, error, ...data } = result.value;
@@ -511,6 +582,9 @@ export const calculateAllHandler = async (args) => {
         } else {
           results.indicators[name] = data;
         }
+      } else if (result.status === 'rejected') {
+        // Log rejected calculations but don't block the response
+        console.log(`⚠️  Calculation rejected: ${result.reason?.message}`);
       }
     }
 
@@ -526,6 +600,7 @@ export const calculateAllHandler = async (args) => {
     };
 
   } catch (error) {
+    // Structured error response to prevent transport blocking
     return {
       content: [
         {

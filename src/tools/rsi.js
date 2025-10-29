@@ -30,29 +30,73 @@ export const rsiDefinition = {
 };
 
 export const rsiHandler = async (args) => {
+  const startTime = Date.now();
   const { prices, period = 14 } = args;
 
-  // Validation
+  // Validation with structured error responses
   if (!Array.isArray(prices) || prices.length === 0) {
-    throw new Error("Prices must be a non-empty array");
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "Prices must be a non-empty array",
+            timestamp: new Date().toISOString(),
+            executionTime: Date.now() - startTime
+          }, null, 2)
+        }
+      ],
+      isError: true
+    };
   }
 
   if (prices.length < period + 1) {
-    throw new Error(`Insufficient data: need at least ${period + 1} prices for RSI calculation with period ${period}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: `Insufficient data: need at least ${period + 1} prices for RSI calculation with period ${period}`,
+            timestamp: new Date().toISOString(),
+            executionTime: Date.now() - startTime
+          }, null, 2)
+        }
+      ],
+      isError: true
+    };
   }
 
   if (prices.some(price => typeof price !== 'number' || isNaN(price))) {
-    throw new Error("All prices must be valid numbers");
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: "All prices must be valid numbers",
+            timestamp: new Date().toISOString(),
+            executionTime: Date.now() - startTime
+          }, null, 2)
+        }
+      ],
+      isError: true
+    };
   }
 
   try {
-    // Calculate RSI using Tulind
-    const result = await new Promise((resolve, reject) => {
-      tulind.indicators.rsi.indicator([prices], [period], (err, results) => {
-        if (err) reject(err);
-        else resolve(results);
-      });
-    });
+    // Calculate RSI with aggressive timeout for trading
+    const result = await Promise.race([
+      new Promise((resolve, reject) => {
+        process.nextTick(() => {
+          tulind.indicators.rsi.indicator([prices], [period], (err, results) => {
+            if (err) reject(err);
+            else resolve(results);
+          });
+        });
+      }),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('RSI calculation timeout')), 1000)
+      )
+    ]);
 
     const rsiValues = result[0];
 
@@ -85,7 +129,8 @@ export const rsiHandler = async (args) => {
         min: Number(Math.min(...rsiValues).toFixed(2)),
         max: Number(Math.max(...rsiValues).toFixed(2)),
         average: Number((rsiValues.reduce((a, b) => a + b, 0) / rsiValues.length).toFixed(2))
-      }
+      },
+      executionTime: Date.now() - startTime
     };
 
     return {
@@ -98,6 +143,19 @@ export const rsiHandler = async (args) => {
     };
 
   } catch (error) {
-    throw new Error(`RSI calculation failed: ${error.message}`);
+    // Structured error response to prevent transport blocking
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            error: `RSI calculation failed: ${error.message}`,
+            timestamp: new Date().toISOString(),
+            executionTime: Date.now() - startTime
+          }, null, 2)
+        }
+      ],
+      isError: true
+    };
   }
 };

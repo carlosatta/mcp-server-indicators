@@ -294,8 +294,22 @@ app.all('/mcp', async (req, res) => {
       await server.connect(transport);
     }
 
-    // Handle the request through the transport
-    await transport.handleRequest(req, res, req.body);
+    // Handle the request through the transport with timeout protection
+    const timeoutId = setTimeout(() => {
+      // Force cleanup session on timeout to prevent cascade failures
+      if (sessionId) {
+        console.log(`⚠️  Force cleanup session ${sessionId} due to timeout`);
+        sessionManager.removeSession(sessionId);
+      }
+    }, MCP_CONFIG.toolExecutionTimeoutMs + 5000); // 5s buffer after tool timeout
+
+    try {
+      await transport.handleRequest(req, res, req.body);
+      clearTimeout(timeoutId);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      throw error;
+    }
     
   } catch (error) {
     console.error('❌ MCP Error:', error);
