@@ -20,21 +20,21 @@ let testResults = {
  */
 async function testSessionCleanupOnTimeout() {
   console.log("1️⃣  Test: Session cleanup on timeout");
-  
+
   try {
     const client = new Client(
       { name: "timeout-cleanup-test", version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
-    
+
     // Get initial session count
     const statsResponse = await fetch(`${baseUrl}/mcp/sessions`);
     const statsBefore = await statsResponse.json();
     console.log(`   📊 Active sessions before: ${statsBefore.activeSessions}`);
-    
+
     // Force a timeout scenario (if possible via large dataset)
     try {
       await client.callTool({
@@ -56,17 +56,17 @@ async function testSessionCleanupOnTimeout() {
       // Expected to fail or timeout
       console.log(`   ⚠️  Operation completed/timed out: ${error.message}`);
     }
-    
+
     await client.close();
-    
+
     // Wait for cleanup
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // Check session count after
     const statsAfterResponse = await fetch(`${baseUrl}/mcp/sessions`);
     const statsAfter = await statsAfterResponse.json();
     console.log(`   📊 Active sessions after: ${statsAfter.activeSessions}`);
-    
+
     if (statsAfter.activeSessions === 0) {
       console.log("   ✅ Session cleaned up correctly");
       testResults.passed++;
@@ -74,7 +74,7 @@ async function testSessionCleanupOnTimeout() {
       console.log("   ⚠️  Session may still be active");
       testResults.warnings++;
     }
-    
+
   } catch (error) {
     console.log(`   ❌ Test failed: ${error.message}`);
     testResults.failed++;
@@ -86,16 +86,16 @@ async function testSessionCleanupOnTimeout() {
  */
 async function testConsecutiveCallsWithErrors() {
   console.log("2️⃣  Test: Consecutive calls with error handling");
-  
+
   try {
     const client = new Client(
       { name: "consecutive-test", version: "1.0.0" },
       { capabilities: {} }
     );
-    
+
     const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
     await client.connect(transport);
-    
+
     // Call 1: Valid request
     const result1 = await client.callTool({
       name: "calculate_rsi",
@@ -105,7 +105,7 @@ async function testConsecutiveCallsWithErrors() {
       }
     });
     console.log("   ✅ Call 1: Valid request succeeded");
-    
+
     // Call 2: Invalid request (should return structured error)
     const result2 = await client.callTool({
       name: "calculate_rsi",
@@ -121,7 +121,7 @@ async function testConsecutiveCallsWithErrors() {
       console.log("   ⚠️  Call 2: Expected error but got success");
       testResults.warnings++;
     }
-    
+
     // Call 3: Another valid request (verify transport not blocked)
     const result3 = await client.callTool({
       name: "calculate_rsi",
@@ -131,10 +131,10 @@ async function testConsecutiveCallsWithErrors() {
       }
     });
     console.log("   ✅ Call 3: Transport remained responsive after error");
-    
+
     await client.close();
     testResults.passed++;
-    
+
   } catch (error) {
     console.log(`   ❌ Test failed: ${error.message}`);
     testResults.failed++;
@@ -146,7 +146,7 @@ async function testConsecutiveCallsWithErrors() {
  */
 async function testErrorCodeConsistency() {
   console.log("3️⃣  Test: Error code consistency");
-  
+
   const tests = [
     {
       name: "Unknown session",
@@ -161,16 +161,16 @@ async function testErrorCodeConsistency() {
       expectedHttp: 400,
     },
   ];
-  
+
   let allPassed = true;
-  
+
   for (const test of tests) {
     try {
       const headers = { 'Content-Type': 'application/json' };
       if (test.sessionId) {
         headers['Mcp-Session-Id'] = test.sessionId;
       }
-      
+
       const response = await fetch(`${baseUrl}/mcp`, {
         method: 'POST',
         headers,
@@ -180,23 +180,23 @@ async function testErrorCodeConsistency() {
           id: 1
         })
       });
-      
+
       const data = await response.json();
-      
-      if (response.status === test.expectedHttp && 
+
+      if (response.status === test.expectedHttp &&
           data.error?.code === test.expectedCode) {
         console.log(`   ✅ ${test.name}: HTTP ${response.status}, code ${data.error.code}`);
       } else {
         console.log(`   ❌ ${test.name}: Expected HTTP ${test.expectedHttp}/${test.expectedCode}, got ${response.status}/${data.error?.code}`);
         allPassed = false;
       }
-      
+
     } catch (error) {
       console.log(`   ❌ ${test.name} failed: ${error.message}`);
       allPassed = false;
     }
   }
-  
+
   if (allPassed) {
     testResults.passed++;
   } else {
@@ -209,22 +209,22 @@ async function testErrorCodeConsistency() {
  */
 async function testParallelExecution() {
   console.log("4️⃣  Test: Parallel execution (no cascade blocking)");
-  
+
   try {
     const clients = [];
     const promises = [];
-    
+
     // Create 3 clients
     for (let i = 0; i < 3; i++) {
       const client = new Client(
         { name: `parallel-client-${i}`, version: "1.0.0" },
         { capabilities: {} }
       );
-      
+
       const transport = new SSEClientTransport(new URL(`${baseUrl}/mcp`));
       await client.connect(transport);
       clients.push(client);
-      
+
       // Execute in parallel
       promises.push(
         client.callTool({
@@ -236,26 +236,26 @@ async function testParallelExecution() {
         })
       );
     }
-    
+
     const startTime = Date.now();
     const results = await Promise.allSettled(promises);
     const duration = Date.now() - startTime;
-    
+
     const successful = results.filter(r => r.status === 'fulfilled').length;
-    
+
     console.log(`   ✅ Parallel execution: ${successful}/3 successful in ${duration}ms`);
-    
+
     // Close all clients
     for (const client of clients) {
       await client.close();
     }
-    
+
     if (successful === 3) {
       testResults.passed++;
     } else {
       testResults.warnings++;
     }
-    
+
   } catch (error) {
     console.log(`   ❌ Test failed: ${error.message}`);
     testResults.failed++;
@@ -267,10 +267,10 @@ async function testParallelExecution() {
  */
 async function testSessionStatistics() {
   console.log("5️⃣  Test: Session statistics endpoint");
-  
+
   try {
     const response = await fetch(`${baseUrl}/mcp/sessions`);
-    
+
     if (response.status === 200) {
       const stats = await response.json();
       console.log(`   ✅ Statistics available:`);
@@ -283,7 +283,7 @@ async function testSessionStatistics() {
       console.log(`   ℹ️  Statistics endpoint disabled (production mode)`);
       testResults.warnings++;
     }
-    
+
   } catch (error) {
     console.log(`   ⚠️  Could not access statistics: ${error.message}`);
     testResults.warnings++;
@@ -298,21 +298,21 @@ async function runExtendedTests() {
     await testErrorCodeConsistency();
     await testParallelExecution();
     await testSessionStatistics();
-    
+
     console.log("=".repeat(60));
     console.log("📊 Extended Conformance Test Results:");
     console.log(`   ✅ Passed: ${testResults.passed}`);
     console.log(`   ❌ Failed: ${testResults.failed}`);
     console.log(`   ⚠️  Warnings: ${testResults.warnings}`);
     console.log("");
-    
+
     if (testResults.failed === 0) {
       console.log("🎉 All critical tests passed!");
       console.log("✨ MCP server is standards-compliant and resilient");
     } else {
       console.log("⚠️  Some tests failed - review implementation");
     }
-    
+
   } catch (error) {
     console.error("❌ Test suite failed:", error.message);
   } finally {

@@ -232,7 +232,7 @@ This server follows the **MCP specification revision 2025-06-18**:
 
 ### Session Management
 - ✅ HTTP 404 (-32004) for unknown session IDs
-- ✅ HTTP 400 (-32602) for missing session IDs  
+- ✅ HTTP 400 (-32602) for missing session IDs
 - ✅ 5-minute session timeout (configurable via `MCP_SESSION_TIMEOUT_MS`)
 - ✅ 30-second cleanup interval (configurable via `MCP_CLEANUP_INTERVAL_MS`)
 - ✅ Graceful session cleanup on timeout

@@ -1,11 +1,11 @@
 /**
  * Calculate All Indicators - Aggregated tool for maximum performance
- * 
+ *
  * ARCHITECTURE OVERVIEW:
  * =====================
  * This module implements parallel calculation of multiple technical indicators
  * with aggressive timeout protection to prevent transport blocking in trading systems.
- * 
+ *
  * KEY FEATURES:
  * - Parallel execution of all indicators (non-blocking)
  * - Individual timeout per indicator (1s default)
@@ -13,25 +13,25 @@
  * - Structured error responses (no exceptions thrown)
  * - Partial results on timeout (trading system protection)
  * - Event loop protection via process.nextTick
- * 
+ *
  * TIMEOUT HIERARCHY:
  * - Atomic operation (tulind call): 1000ms
  * - Individual indicator: 1000ms
  * - Global operation: 5000ms
  * - Tool execution (server): 20000ms
  * - Session timeout: 300000ms (5 min)
- * 
+ *
  * ERROR HANDLING:
  * - No exceptions thrown (prevents transport blocking)
  * - All errors returned as structured JSON responses
  * - Partial results preserved on timeout
  * - Individual indicator failures don't block others
- * 
+ *
  * PERFORMANCE:
  * - Typical execution: 1-5ms for 3-8 indicators
  * - Concurrent execution: 5+ parallel calculations supported
  * - No event loop blocking via process.nextTick
- * 
+ *
  * USAGE:
  * See inputSchema below for parameter details.
  * Returns structured JSON with results or errors per indicator.

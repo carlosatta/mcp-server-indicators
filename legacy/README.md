@@ -5,7 +5,7 @@ This directory contains obsolete/deprecated files that are no longer used in the
 ## Files
 
 ### `index.js.legacy`
-**Status:** Deprecated (replaced in commit 66513f0)  
+**Status:** Deprecated (replaced in commit 66513f0)
 **Reason:** Contained non-compliant MCP session management
 
 **Issues with this version:**
