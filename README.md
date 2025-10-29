@@ -223,6 +223,67 @@ src/
 - **Tulind Library**: C-based calculations for maximum performance
 - **Efficient Memory Usage**: Streaming calculations where possible
 - **Error Handling**: Comprehensive validation and error messages
+- **Parallel Execution**: Multiple indicators calculated concurrently (1-5ms typical)
+- **No Event Loop Blocking**: process.nextTick protection for tulind operations
+
+## MCP Standard Compliance
+
+This server follows the **MCP specification revision 2025-06-18**:
+
+### Session Management
+- ✅ HTTP 404 (-32004) for unknown session IDs
+- ✅ HTTP 400 (-32602) for missing session IDs  
+- ✅ 5-minute session timeout (configurable via `MCP_SESSION_TIMEOUT_MS`)
+- ✅ 30-second cleanup interval (configurable via `MCP_CLEANUP_INTERVAL_MS`)
+- ✅ Graceful session cleanup on timeout
+
+### Error Handling
+- ✅ Structured error responses (no thrown exceptions)
+- ✅ Transport blocking prevention
+- ✅ Individual operation timeouts (1s per indicator)
+- ✅ Global operation timeout (5s for batch calculations)
+- ✅ Partial results on timeout (trading system protection)
+
+### Error Codes
+- `-32602`: Invalid parameters / Session ID required
+- `-32004`: Session not found
+- `-32000`: Bad request
+- `-32603`: Internal server error
+- `-32601`: Method not found
+
+### Testing
+Run conformance tests to verify MCP compliance:
+
+```bash
+# Basic conformance test
+npm run test
+
+# Extended conformance test (session lifecycle, errors, parallel execution)
+node test-extended-conformance.js
+
+# Stress test (concurrent execution, timeout scenarios)
+node test-stress-cascade.js
+```
+
+### Configuration
+Environment variables for MCP behavior:
+
+```env
+# Session timeout (default: 5 minutes)
+MCP_SESSION_TIMEOUT_MS=300000
+
+# Cleanup interval (default: 30 seconds)
+MCP_CLEANUP_INTERVAL_MS=30000
+
+# Tool execution timeout (default: 20 seconds)
+TOOL_EXECUTION_TIMEOUT_MS=20000
+
+# Allow auto-recreate sessions (default: false, strict compliance)
+ALLOW_AUTO_SESSION_RECREATE=false
+
+# Enable session debug endpoint (default: auto-detect)
+ENABLE_SESSION_DEBUG=true
+```
 
 ## Use Cases
 
@@ -231,6 +292,19 @@ src/
 - **Market Research**: Backtesting and strategy development
 - **Risk Management**: Volatility and trend analysis
 - **AI/ML Training**: Feature generation for models
+
+## Architecture Notes
+
+### Transport Blocking Prevention
+This implementation includes protection against transport blocking cascade failures:
+- Aggressive timeouts (1s per indicator, 5s total)
+- Session cleanup on timeout
+- Structured error responses (never throws exceptions)
+- Parallel indicator execution
+- Event loop protection via process.nextTick
+
+### Legacy Files
+The `legacy/` directory contains deprecated implementations for reference only. Do not use these files in production.
 
 ## Contributing
 
