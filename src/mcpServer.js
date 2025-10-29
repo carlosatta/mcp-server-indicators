@@ -8,7 +8,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { SERVER_CONFIG } from "./config/config.js";
+import { SERVER_CONFIG, MCP_CONFIG } from "./config/config.js";
 import { publicToolsDefinitions, publicToolsHandlers } from "./tools/publicTools.js";
 
 /**
@@ -65,8 +65,15 @@ export function createMCPServer() {
         };
       }
 
-      // Execute the handler
-      const result = await allHandlers[name](args);
+      // Execute the handler with timeout (configurable)
+      const executionTimeout = MCP_CONFIG.toolExecutionTimeoutMs;
+      const handlerPromise = allHandlers[name](args);
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Tool execution timed out after ${executionTimeout}ms`));
+        }, executionTimeout);
+      });      const result = await Promise.race([handlerPromise, timeoutPromise]);
       console.log(`✅ Tool ${name} executed successfully`);
       return result;
     } catch (error) {

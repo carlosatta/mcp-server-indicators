@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from "crypto";
 import express from "express";
 import cors from "cors";
 import net from "net";
 import { createMCPServer, getServerStats } from "./src/mcpServer.js";
 import { publicToolsHandlers } from "./src/tools/publicTools.js";
+import { MCPSessionManager } from "./src/utils/sessionManager.js";
 import {
   SERVER_CONFIG,
-  CORS_CONFIG
+  CORS_CONFIG,
+  MCP_CONFIG
 } from "./src/config/config.js";
 
 /**
@@ -69,18 +70,18 @@ const app = express();
 const HOST = SERVER_CONFIG.host;
 const PREFERRED_PORT = SERVER_CONFIG.port;
 
-// Configure CORS to expose Mcp-Session-Id header
-app.use(cors({
-  ...CORS_CONFIG,
-  exposedHeaders: ['Mcp-Session-Id', ...(CORS_CONFIG.exposedHeaders || [])]
-}));
+// Configure CORS with MCP headers
+app.use(cors(CORS_CONFIG));
 app.use(express.json());
 
 const server = createMCPServer();
 
-// Store transports by session ID with metadata
-const transports = new Map();
-const sessionMetadata = new Map();
+// Initialize MCP Session Manager with configuration
+const sessionManager = new MCPSessionManager({
+  inactiveTimeoutMs: MCP_CONFIG.sessionTimeoutMs,
+  cleanupIntervalMs: MCP_CONFIG.cleanupIntervalMs,
+  allowAutoSessionRecreate: MCP_CONFIG.allowAutoSessionRecreate
+});
 
 //=============================================================================
 // REST API ENDPOINTS - Direct HTTP API access (non-MCP)
@@ -237,66 +238,65 @@ async function startServer() {
 }
 
 //=============================================================================
-// MCP ENDPOINT - Streamable HTTP Transport (Protocol 2025-03-26)
+// MCP ENDPOINT - Standard Compliant Session Management (MCP 2025-06-18)
 //=============================================================================
 app.all('/mcp', async (req, res) => {
   const sessionId = req.headers['mcp-session-id'];
 
   try {
-    let transport;
-
-    if (sessionId && transports.has(sessionId)) {
-      // Reuse existing transport
-      transport = transports.get(sessionId);
-
-      // Update last activity
-      const metadata = sessionMetadata.get(sessionId);
-      if (metadata) {
-        metadata.lastActivity = new Date();
-      }
-    } else if (!sessionId) {
-      // Create new transport for new session
-      transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => randomUUID(),
-        onsessioninitialized: (newSessionId) => {
-          transports.set(newSessionId, transport);
-          sessionMetadata.set(newSessionId, {
-            connectedAt: new Date(),
-            lastActivity: new Date(),
-            clientIp: req.ip,
-            userAgent: req.get('user-agent')
-          });
-          console.log(`✅ New MCP session: ${newSessionId}`);
-        }
-      });
-
-      // Set up onclose handler
-      transport.onclose = () => {
-        const sid = transport.sessionId;
-        if (sid && transports.has(sid)) {
-          transports.delete(sid);
-          sessionMetadata.delete(sid);
-          console.log(`🔌 Session closed: ${sid}`);
-        }
-      };
-
-      // Connect server to transport
-      await server.connect(transport);
-    } else {
-      // Session ID provided but not found
-      res.status(400).json({
+    // Validate session according to MCP standard
+    const validation = sessionManager.validateSession(sessionId, req.method, req.body);
+    
+    if (validation.status === 'error') {
+      // Standard compliant error responses
+      const response = {
         jsonrpc: '2.0',
         error: {
-          code: -32000,
-          message: 'Bad Request: Invalid session ID'
+          code: validation.jsonRpcCode,
+          message: validation.message
         },
         id: null
-      });
+      };
+      
+      console.log(`❌ MCP Session Error: ${validation.message} (${validation.httpCode})`);
+      res.status(validation.httpCode).json(response);
       return;
     }
 
-    // Handle the request
+    let transport;
+
+    if (validation.status === 'use_existing') {
+      // Use existing session
+      transport = sessionManager.getTransport(sessionId);
+      sessionManager.updateActivity(sessionId);
+      
+    } else if (validation.status === 'create_new') {
+      // Create new session (for initialize or auto-recreate)
+      transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => {
+          // Generate session ID and store in session manager
+          const newSessionId = sessionManager.createSession(transport, {
+            clientIp: req.ip,
+            userAgent: req.get('user-agent'),
+            createdBy: req.body?.method === 'initialize' ? 'initialize' : 'auto-recreate'
+          });
+          
+          // Set up session lifecycle handlers
+          transport.onclose = () => {
+            sessionManager.removeSession(newSessionId);
+          };
+          
+          return newSessionId;
+        }
+      });
+
+      // Connect server to transport
+      await server.connect(transport);
+    }
+
+    // Handle the request through the transport
     await transport.handleRequest(req, res, req.body);
+    
   } catch (error) {
     console.error('❌ MCP Error:', error);
     if (!res.headersSent) {
@@ -312,27 +312,18 @@ app.all('/mcp', async (req, res) => {
   }
 });
 
-// Cleanup inactive sessions every 10 seconds (60s timeout)
-const INACTIVE_TIMEOUT_MS = 60 * 1000;
-setInterval(() => {
-  const now = new Date();
-  for (const [sessionId, transport] of transports.entries()) {
-    const metadata = sessionMetadata.get(sessionId);
-    if (metadata && metadata.lastActivity) {
-      const inactiveMs = now - metadata.lastActivity;
-      if (inactiveMs > INACTIVE_TIMEOUT_MS) {
-        try {
-          transport.close();
-          transports.delete(sessionId);
-          sessionMetadata.delete(sessionId);
-          console.log(`⏰ Session timeout: ${sessionId}`);
-        } catch (error) {
-          console.error(`Error closing session ${sessionId}:`, error.message);
-        }
-      }
-    }
+// MCP Session Management Endpoint (for debugging/monitoring)
+app.get('/mcp/sessions', (req, res) => {
+  const isDev = process.env.NODE_ENV === 'development' || 
+                process.env.ENABLE_SESSION_DEBUG === 'true' ||
+                !process.env.NODE_ENV; // Default when NODE_ENV is not set
+  
+  if (isDev) {
+    res.json(sessionManager.getStats());
+  } else {
+    res.status(404).json({ error: 'Not found' });
   }
-}, 10000);
+});
 
 // Start the server with automatic port selection
 startServer();
@@ -354,15 +345,17 @@ process.on('uncaughtException', (error) => {
   }
 });
 
-// Graceful shutdown
+// Graceful shutdown with session cleanup
 process.on('SIGINT', () => {
   console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+  sessionManager.shutdown();
   console.log('✅ Shutdown complete');
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
+  sessionManager.shutdown();
   console.log('✅ Shutdown complete');
   process.exit(0);
 });

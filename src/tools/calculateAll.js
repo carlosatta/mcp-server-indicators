@@ -149,15 +149,15 @@ export const calculateAllDefinition = {
               }
             ]
           },
-          bollingerBands: {
+          bollinger: {
             description: "Bollinger Bands configuration - can be object or array of objects",
             oneOf: [
               {
                 type: "object",
                 properties: {
                   enabled: { type: "boolean", description: "Calculate Bollinger Bands" },
-                  period: { type: "number", description: "Period (default: 20)" },
-                  stddev: { type: "number", description: "Standard deviation (default: 2)" },
+                  period: { type: "number", description: "Moving average period (default: 20)" },
+                  stddev: { type: "number", description: "Standard deviation multiplier (default: 2)" },
                   name: { type: "string", description: "Custom name" }
                 }
               },
@@ -167,8 +167,8 @@ export const calculateAllDefinition = {
                   type: "object",
                   properties: {
                     enabled: { type: "boolean", description: "Calculate Bollinger Bands" },
-                    period: { type: "number", description: "Period" },
-                    stddev: { type: "number", description: "Standard deviation" },
+                    period: { type: "number", description: "Moving average period" },
+                    stddev: { type: "number", description: "Standard deviation multiplier" },
                     name: { type: "string", description: "Custom name" }
                   }
                 }
@@ -182,9 +182,9 @@ export const calculateAllDefinition = {
                 type: "object",
                 properties: {
                   enabled: { type: "boolean", description: "Calculate Stochastic" },
-                  kPeriod: { type: "number", description: "%K period (default: 14)" },
-                  kSlowPeriod: { type: "number", description: "%K slowing period (default: 3)" },
-                  dPeriod: { type: "number", description: "%D period (default: 3)" },
+                  kPeriod: { type: "number", description: "K period (default: 14)" },
+                  kSlowing: { type: "number", description: "K slowing (default: 3)" },
+                  dPeriod: { type: "number", description: "D period (default: 3)" },
                   name: { type: "string", description: "Custom name" }
                 }
               },
@@ -194,9 +194,9 @@ export const calculateAllDefinition = {
                   type: "object",
                   properties: {
                     enabled: { type: "boolean", description: "Calculate Stochastic" },
-                    kPeriod: { type: "number", description: "%K period" },
-                    kSlowPeriod: { type: "number", description: "%K slowing period" },
-                    dPeriod: { type: "number", description: "%D period" },
+                    kPeriod: { type: "number", description: "K period" },
+                    kSlowing: { type: "number", description: "K slowing" },
+                    dPeriod: { type: "number", description: "D period" },
                     name: { type: "string", description: "Custom name" }
                   }
                 }
@@ -230,21 +230,58 @@ export const calculateAllDefinition = {
         }
       }
     },
-    required: ["ohlcv"]
+    required: ["symbol", "ohlcv", "indicators"]
   }
 };
 
 /**
- * Handler for calculate_all_indicators
+ * Helper function to create Promise with timeout
+ * @param {Promise} promise - Promise to wrap
+ * @param {number} timeout - Timeout in ms
+ * @returns {Promise} Promise with timeout
+ */
+const withTimeout = (promise, timeout = 5000) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Operation timed out after ${timeout}ms`)), timeout)
+    )
+  ]);
+};
+
+/**
+ * Helper function to run tulind indicator with timeout
+ * @param {string} indicatorName - Tulind indicator name
+ * @param {Array} inputs - Input arrays
+ * @param {Array} params - Parameters
+ * @param {number} timeout - Timeout in ms
+ * @returns {Promise<Array>} Result array
+ */
+const runIndicatorWithTimeout = (indicatorName, inputs, params, timeout = 3000) => {
+  const promise = new Promise((resolve, reject) => {
+    tulind.indicators[indicatorName].indicator(inputs, params, (err, res) => {
+      if (err) reject(err);
+      else resolve(res);
+    });
+  });
+  return withTimeout(promise, timeout);
+};
+
+/**
+ * Handler function for calculate_all_indicators
+ * @param {object} args - Tool arguments
+ * @returns {object} Calculation results or error
  */
 export const calculateAllHandler = async (args) => {
-  try {
-    const { symbol = "Unknown", ohlcv, indicators = {} } = args;
-    const { high, low, close, volume = [] } = ohlcv;
+  const startTime = Date.now();
 
-    // Validate input arrays
-    if (!Array.isArray(high) || !Array.isArray(low) || !Array.isArray(close)) {
-      throw new Error("OHLCV data must contain arrays for high, low, and close prices");
+  try {
+    const { symbol, ohlcv, indicators } = args;
+    const { high, low, close, volume } = ohlcv;
+
+    // Validation
+    if (!high || !low || !close) {
+      throw new Error("Missing required OHLCV data (high, low, close)");
     }
 
     if (high.length !== low.length || high.length !== close.length) {
@@ -259,7 +296,8 @@ export const calculateAllHandler = async (args) => {
       symbol,
       timestamp: new Date().toISOString(),
       dataPoints: close.length,
-      indicators: {}
+      indicators: {},
+      executionTime: 0
     };
 
     // Helper function to normalize indicator config (object or array)
@@ -267,6 +305,9 @@ export const calculateAllHandler = async (args) => {
       if (!config) return [];
       return Array.isArray(config) ? config : [config];
     };
+
+    // Collect all indicator calculations to run in parallel
+    const calculations = [];
 
     // Calculate RSI (support multiple periods)
     const rsiConfigs = normalizeConfig(indicators.rsi);
@@ -276,18 +317,17 @@ export const calculateAllHandler = async (args) => {
         const name = config.name || `rsi_${period}`;
 
         if (close.length >= period) {
-          const rsiResult = await new Promise((resolve, reject) => {
-            tulind.indicators.rsi.indicator([close], [period], (err, res) => {
-              if (err) reject(err);
-              else resolve(res[0]);
-            });
-          });
-          results.indicators[name] = {
-            type: 'RSI',
-            period,
-            values: Array.from(rsiResult),
-            latest: rsiResult[rsiResult.length - 1]
-          };
+          calculations.push(
+            runIndicatorWithTimeout('rsi', [close], [period])
+              .then(res => ({
+                name,
+                type: 'RSI',
+                period,
+                values: Array.from(res[0]),
+                latest: res[0][res[0].length - 1]
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
@@ -300,18 +340,17 @@ export const calculateAllHandler = async (args) => {
         const name = config.name || `ema_${period}`;
 
         if (close.length >= period) {
-          const emaResult = await new Promise((resolve, reject) => {
-            tulind.indicators.ema.indicator([close], [period], (err, res) => {
-              if (err) reject(err);
-              else resolve(res[0]);
-            });
-          });
-          results.indicators[name] = {
-            type: 'EMA',
-            period,
-            values: Array.from(emaResult),
-            latest: emaResult[emaResult.length - 1]
-          };
+          calculations.push(
+            runIndicatorWithTimeout('ema', [close], [period])
+              .then(res => ({
+                name,
+                type: 'EMA',
+                period,
+                values: Array.from(res[0]),
+                latest: res[0][res[0].length - 1]
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
@@ -324,18 +363,17 @@ export const calculateAllHandler = async (args) => {
         const name = config.name || `sma_${period}`;
 
         if (close.length >= period) {
-          const smaResult = await new Promise((resolve, reject) => {
-            tulind.indicators.sma.indicator([close], [period], (err, res) => {
-              if (err) reject(err);
-              else resolve(res[0]);
-            });
-          });
-          results.indicators[name] = {
-            type: 'SMA',
-            period,
-            values: Array.from(smaResult),
-            latest: smaResult[smaResult.length - 1]
-          };
+          calculations.push(
+            runIndicatorWithTimeout('sma', [close], [period])
+              .then(res => ({
+                name,
+                type: 'SMA',
+                period,
+                values: Array.from(res[0]),
+                latest: res[0][res[0].length - 1]
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
@@ -349,38 +387,32 @@ export const calculateAllHandler = async (args) => {
         const signalPeriod = config.signalPeriod || 9;
         const name = config.name || `macd_${fastPeriod}_${slowPeriod}_${signalPeriod}`;
 
-        if (close.length >= slowPeriod + signalPeriod) {
-          const macdResult = await new Promise((resolve, reject) => {
-            tulind.indicators.macd.indicator(
-              [close],
-              [fastPeriod, slowPeriod, signalPeriod],
-              (err, res) => {
-                if (err) reject(err);
-                else resolve(res);
-              }
-            );
-          });
-
-          results.indicators[name] = {
-            type: 'MACD',
-            fastPeriod,
-            slowPeriod,
-            signalPeriod,
-            macd: Array.from(macdResult[0]),
-            signal: Array.from(macdResult[1]),
-            histogram: Array.from(macdResult[2]),
-            latest: {
-              macd: macdResult[0][macdResult[0].length - 1],
-              signal: macdResult[1][macdResult[1].length - 1],
-              histogram: macdResult[2][macdResult[2].length - 1]
-            }
-          };
+        if (close.length >= slowPeriod) {
+          calculations.push(
+            runIndicatorWithTimeout('macd', [close], [fastPeriod, slowPeriod, signalPeriod])
+              .then(res => ({
+                name,
+                type: 'MACD',
+                fastPeriod,
+                slowPeriod,
+                signalPeriod,
+                macd: Array.from(res[0]),
+                signal: Array.from(res[1]),
+                histogram: Array.from(res[2]),
+                latest: {
+                  macd: res[0][res[0].length - 1],
+                  signal: res[1][res[1].length - 1],
+                  histogram: res[2][res[2].length - 1]
+                }
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
 
     // Calculate Bollinger Bands (support multiple configurations)
-    const bbConfigs = normalizeConfig(indicators.bollingerBands);
+    const bbConfigs = normalizeConfig(indicators.bollinger);
     for (const config of bbConfigs) {
       if (config.enabled) {
         const period = config.period || 20;
@@ -388,30 +420,24 @@ export const calculateAllHandler = async (args) => {
         const name = config.name || `bb_${period}_${stddev}`;
 
         if (close.length >= period) {
-          const bbResult = await new Promise((resolve, reject) => {
-            tulind.indicators.bbands.indicator(
-              [close],
-              [period, stddev],
-              (err, res) => {
-                if (err) reject(err);
-                else resolve(res);
-              }
-            );
-          });
-
-          results.indicators[name] = {
-            type: 'BollingerBands',
-            period,
-            stddev,
-            lower: Array.from(bbResult[0]),
-            middle: Array.from(bbResult[1]),
-            upper: Array.from(bbResult[2]),
-            latest: {
-              lower: bbResult[0][bbResult[0].length - 1],
-              middle: bbResult[1][bbResult[1].length - 1],
-              upper: bbResult[2][bbResult[2].length - 1]
-            }
-          };
+          calculations.push(
+            runIndicatorWithTimeout('bbands', [close], [period, stddev])
+              .then(res => ({
+                name,
+                type: 'Bollinger Bands',
+                period,
+                stddev,
+                lower: Array.from(res[0]),
+                middle: Array.from(res[1]),
+                upper: Array.from(res[2]),
+                latest: {
+                  lower: res[0][res[0].length - 1],
+                  middle: res[1][res[1].length - 1],
+                  upper: res[2][res[2].length - 1]
+                }
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
@@ -421,34 +447,28 @@ export const calculateAllHandler = async (args) => {
     for (const config of stochConfigs) {
       if (config.enabled) {
         const kPeriod = config.kPeriod || 14;
-        const kSlowPeriod = config.kSlowPeriod || 3;
+        const kSlowing = config.kSlowing || 3;
         const dPeriod = config.dPeriod || 3;
-        const name = config.name || `stoch_${kPeriod}_${kSlowPeriod}_${dPeriod}`;
+        const name = config.name || `stoch_${kPeriod}_${kSlowing}_${dPeriod}`;
 
-        if (high.length >= kPeriod + kSlowPeriod) {
-          const stochResult = await new Promise((resolve, reject) => {
-            tulind.indicators.stoch.indicator(
-              [high, low, close],
-              [kPeriod, kSlowPeriod, dPeriod],
-              (err, res) => {
-                if (err) reject(err);
-                else resolve(res);
-              }
-            );
-          });
-
-          results.indicators[name] = {
-            type: 'Stochastic',
-            kPeriod,
-            kSlowPeriod,
-            dPeriod,
-            k: Array.from(stochResult[0]),
-            d: Array.from(stochResult[1]),
-            latest: {
-              k: stochResult[0][stochResult[0].length - 1],
-              d: stochResult[1][stochResult[1].length - 1]
-            }
-          };
+        if (high.length >= kPeriod) {
+          calculations.push(
+            runIndicatorWithTimeout('stoch', [high, low, close], [kPeriod, kSlowing, dPeriod])
+              .then(res => ({
+                name,
+                type: 'Stochastic',
+                kPeriod,
+                kSlowing,
+                dPeriod,
+                k: Array.from(res[0]),
+                d: Array.from(res[1]),
+                latest: {
+                  k: res[0][res[0].length - 1],
+                  d: res[1][res[1].length - 1]
+                }
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
@@ -461,26 +481,40 @@ export const calculateAllHandler = async (args) => {
         const name = config.name || `atr_${period}`;
 
         if (high.length >= period) {
-          const atrResult = await new Promise((resolve, reject) => {
-            tulind.indicators.atr.indicator(
-              [high, low, close],
-              [period],
-              (err, res) => {
-                if (err) reject(err);
-                else resolve(res[0]);
-              }
-            );
-          });
-
-          results.indicators[name] = {
-            type: 'ATR',
-            period,
-            values: Array.from(atrResult),
-            latest: atrResult[atrResult.length - 1]
-          };
+          calculations.push(
+            runIndicatorWithTimeout('atr', [high, low, close], [period])
+              .then(res => ({
+                name,
+                type: 'ATR',
+                period,
+                values: Array.from(res[0]),
+                latest: res[0][res[0].length - 1]
+              }))
+              .catch(err => ({ name, error: err.message }))
+          );
         }
       }
     }
+
+    // Execute all calculations in parallel with overall timeout
+    const allCalculations = await withTimeout(
+      Promise.allSettled(calculations),
+      15000 // 15 second max for all calculations
+    );
+
+    // Process results
+    for (const result of allCalculations) {
+      if (result.status === 'fulfilled' && result.value) {
+        const { name, error, ...data } = result.value;
+        if (error) {
+          results.indicators[name] = { error };
+        } else {
+          results.indicators[name] = data;
+        }
+      }
+    }
+
+    results.executionTime = Date.now() - startTime;
 
     return {
       content: [
@@ -498,7 +532,8 @@ export const calculateAllHandler = async (args) => {
           type: "text",
           text: JSON.stringify({
             error: error.message,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            executionTime: Date.now() - startTime
           }, null, 2)
         }
       ],
