@@ -12,6 +12,7 @@ export class MCPSessionManager {
   constructor(options = {}) {
     this.transports = new Map();
     this.sessionMetadata = new Map();
+    this.sessionServers = new Map();
 
     // Configuration with environment variables support
     this.inactiveTimeoutMs = options.inactiveTimeoutMs ||
@@ -48,22 +49,79 @@ export class MCPSessionManager {
   }
 
   /**
-   * Create a new session
-   * @param {object} transport - Transport object
-   * @param {object} metadata - Session metadata
+   * Get MCP server instance for a session
+   * @param {string} sessionId - Session ID
+   * @returns {object|null} MCP server or null if not found
+   */
+  getServer(sessionId) {
+    return this.sessionServers.get(sessionId) || null;
+  }
+
+  /**
+   * Attach or replace the MCP server for a session
+   * @param {string} sessionId - Session ID
+   * @param {object} server - MCP server instance
+   */
+  setServer(sessionId, server) {
+    if (!sessionId) {
+      return;
+    }
+
+    if (server) {
+      this.sessionServers.set(sessionId, server);
+    } else {
+      this.sessionServers.delete(sessionId);
+    }
+  }
+
+  /**
+   * Generate a new session ID
    * @returns {string} New session ID
    */
-  createSession(transport, metadata = {}) {
-    const sessionId = randomUUID();
+  generateSessionId() {
+    return randomUUID();
+  }
 
-    this.transports.set(sessionId, transport);
+  /**
+   * Register transport, server and metadata for a session
+   * @param {object} options - Registration options
+   * @param {string} options.sessionId - Session identifier
+   * @param {object} options.transport - Transport object
+   * @param {object} options.server - MCP server instance
+   * @param {object} [options.metadata] - Session metadata
+   */
+  registerSession({ sessionId, transport, server, metadata = {} }) {
+    if (!sessionId) {
+      throw new Error('Session ID is required to register session');
+    }
+
+    if (transport) {
+      this.transports.set(sessionId, transport);
+    }
+
+    if (server) {
+      this.sessionServers.set(sessionId, server);
+    }
+
     this.sessionMetadata.set(sessionId, {
       connectedAt: new Date(),
       lastActivity: new Date(),
       ...metadata
     });
 
-    console.log(`✅ New MCP session created: ${sessionId}`);
+    console.log(`✅ Session registered: ${sessionId}`);
+  }
+
+  /**
+   * Create a new session with generated identifier
+   * @param {object} transport - Transport object
+   * @param {object} server - MCP server instance
+   * @param {object} metadata - Session metadata
+   * @returns {string} New session ID
+   */
+  createSession(transport, server, metadata = {}) {
+    const sessionId = this.generateSessionId();
+    this.registerSession({ sessionId, transport, server, metadata });
     return sessionId;
   }
 
@@ -95,6 +153,19 @@ export class MCPSessionManager {
     }
 
     this.transports.delete(sessionId);
+    const server = this.sessionServers.get(sessionId);
+    if (server) {
+      try {
+        if (typeof server.close === 'function') {
+          server.close();
+        } else if (typeof server.dispose === 'function') {
+          server.dispose();
+        }
+      } catch (error) {
+        console.error(`Error closing server for session ${sessionId}:`, error.message);
+      }
+    }
+    this.sessionServers.delete(sessionId);
     this.sessionMetadata.delete(sessionId);
     console.log(`🔌 Session removed: ${sessionId}`);
   }
@@ -161,6 +232,7 @@ export class MCPSessionManager {
   getStats() {
     return {
       activeSessions: this.transports.size,
+      activeServers: this.sessionServers.size,
       inactiveTimeoutMs: this.inactiveTimeoutMs,
       cleanupIntervalMs: this.cleanupIntervalMs,
       allowAutoSessionRecreate: this.allowAutoSessionRecreate,

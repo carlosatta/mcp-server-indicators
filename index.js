@@ -74,8 +74,6 @@ const PREFERRED_PORT = SERVER_CONFIG.port;
 app.use(cors(CORS_CONFIG));
 app.use(express.json());
 
-const server = createMCPServer();
-
 // Initialize MCP Session Manager with configuration
 const sessionManager = new MCPSessionManager({
   inactiveTimeoutMs: MCP_CONFIG.sessionTimeoutMs,
@@ -264,31 +262,51 @@ app.all('/mcp', async (req, res) => {
     }
 
     let transport;
+    let server;
 
     if (validation.status === 'use_existing') {
       // Use existing session
       transport = sessionManager.getTransport(sessionId);
+      server = sessionManager.getServer(sessionId);
+
+      if (!server) {
+        console.warn(`⚠️  Session ${sessionId} missing server instance, recreating dedicated handler`);
+        server = createMCPServer();
+        await server.connect(transport);
+        sessionManager.setServer(sessionId, server);
+      }
       sessionManager.updateActivity(sessionId);
 
     } else if (validation.status === 'create_new') {
       // Create new session (for initialize or auto-recreate)
+      server = createMCPServer();
+      const requestedSessionId = sessionId;
+      let initializedSessionId;
+
       transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: () => {
-          // Generate session ID and store in session manager
-          const newSessionId = sessionManager.createSession(transport, {
-            clientIp: req.ip,
-            userAgent: req.get('user-agent'),
-            createdBy: req.body?.method === 'initialize' ? 'initialize' : 'auto-recreate'
+        sessionIdGenerator: () => requestedSessionId || sessionManager.generateSessionId(),
+        onsessioninitialized: (newSessionId) => {
+          initializedSessionId = newSessionId;
+          sessionManager.registerSession({
+            sessionId: newSessionId,
+            transport,
+            server,
+            metadata: {
+              clientIp: req.ip,
+              userAgent: req.get('user-agent'),
+              createdBy: req.body?.method === 'initialize' ? 'initialize' : 'auto-recreate'
+            }
           });
-
-          // Set up session lifecycle handlers
-          transport.onclose = () => {
-            sessionManager.removeSession(newSessionId);
-          };
-
-          return newSessionId;
         }
       });
+
+      // Set up session lifecycle handlers
+      transport.onclose = () => {
+        const sid = transport.sessionId || initializedSessionId;
+        if (sid) {
+          sessionManager.removeSession(sid);
+        }
+      };
 
       // Connect server to transport
       await server.connect(transport);
@@ -297,14 +315,19 @@ app.all('/mcp', async (req, res) => {
     // Handle the request through the transport with timeout protection
     const timeoutId = setTimeout(() => {
       // Force cleanup session on timeout to prevent cascade failures
-      if (sessionId) {
-        console.log(`⚠️  Force cleanup session ${sessionId} due to timeout`);
-        sessionManager.removeSession(sessionId);
+      const activeSessionId = sessionId || transport.sessionId;
+      if (activeSessionId) {
+        console.log(`⚠️  Force cleanup session ${activeSessionId} due to timeout`);
+        sessionManager.removeSession(activeSessionId);
       }
     }, MCP_CONFIG.toolExecutionTimeoutMs + 5000); // 5s buffer after tool timeout
 
     try {
       await transport.handleRequest(req, res, req.body);
+      const finalizedSessionId = sessionId || transport.sessionId;
+      if (finalizedSessionId) {
+        sessionManager.updateActivity(finalizedSessionId);
+      }
       clearTimeout(timeoutId);
     } catch (error) {
       clearTimeout(timeoutId);
